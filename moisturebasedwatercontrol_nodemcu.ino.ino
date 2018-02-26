@@ -7,13 +7,15 @@
 #include <AzureIoTHub.h>
 #include <AzureIoTProtocol_MQTT.h>
 #include <AzureIoTUtility.h>
+#include "simplesample_mqtt.h"
+
 #define MESSAGE_MAX_LEN 256
 int sensor_pin = A0; 
 //int sensor_pin = 12; 
 //int solenoidPin = 4;    //This is the output pin on the Arduino we are using
 int solenoidPin = 05;    //Testing with LED instead of solenoid
 
-const char* ssid = "Wifi One";
+const char* ssid = "Techolution";
 const char* password = "wearethebest";
 
 int moistureValue ;
@@ -53,7 +55,7 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-static IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle;
+//static IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle;
 void setup() {
   Serial.begin(9600);
   Serial.println("Reading From the Sensor ...");
@@ -64,6 +66,7 @@ void setup() {
 
   setup_wifi();
   //client.setServer(mqtt_server, 1883);
+  initTime();
 
 //setup Last Will and Testament (optional)
 // Broker will publish a message with qos = 0, retain = 0, data = "offline" 
@@ -73,7 +76,7 @@ void setup() {
   m:on("connect", function(client) print ("connected") end)
   m:on("offline", function(client) print ("offline") end)
   */
-
+/*
   iotHubClientHandle = IoTHubClient_LL_CreateFromConnectionString(connectionString, MQTT_Protocol);
     if (iotHubClientHandle == NULL)
     {
@@ -85,7 +88,7 @@ void setup() {
     IoTHubClient_LL_SetMessageCallback(iotHubClientHandle, receiveMessageCallback, NULL);
     IoTHubClient_LL_SetDeviceMethodCallback(iotHubClientHandle, deviceMethodCallback, NULL);
     IoTHubClient_LL_SetDeviceTwinCallback(iotHubClientHandle, twinCallback, NULL);
-
+*/
   
   }
 
@@ -97,6 +100,10 @@ void loop() {
  // Serial.print("Closing valve ");
   digitalWrite(solenoidPin, HIGH);     //Switch Solenoid OFF
   delay(10000);                      //Wait 1 Second
+  //TESTing WITHOUT SENSOR START
+ // moistureValue= 300;
+
+  //TESTing WITHOUT SENSOR END
   moistureValue= analogRead(sensor_pin);
   //moistureValue= digitalRead(sensor_pin);
   Serial.print("moistureValue  before conversion");
@@ -104,33 +111,40 @@ void loop() {
   Serial.print("%");
  // moistureValue = map(moistureValue,550,0,0,100);
   moistureValue = map(moistureValue,1023,250,0,100);
+  Serial.print("moistureValue  after  conversion");
   Serial.print(moistureValue);
   time_t now = time(nullptr);
  // Serial.println(ctime(&now));
-  String msg="{\"deviceId\":\"techo_smartfarming_soilmoisture_001\",\"moisture\":\"";
-  msg= msg+ moistureValue+"\"}";
-  Serial.print("Message is ");
-  Serial.print(msg);
-  char message[500];
-  msg.toCharArray(message,500);
+  char* msg="{\"deviceId\":\"techo_smartfarming_soilmoisture_001\",\"moisture\":\"50";
+ // msg= msg+ moistureValue+"\"}";
+  //Serial.print("Message is ");
+  //Serial.print(msg);
+ // char* message[msg.length()];
+//  msg.toCharArray(message,500);
   //SENDING TO MQTT ENDPOINT though successful from client, its not getting picked up at server side
  // client.publish(topicName, message,1);
 
   char messagePayload[MESSAGE_MAX_LEN];
    bool temperatureAlert = false;
-   char charBuf[msg.length()+1];
+//   char* charBuf[msg.length()+1];
 //  bool alert = readMessage(moistureValue, messagePayload);
-   msg.toCharArray(charBuf, msg.length()+1);
-  sendMessage(iotHubClientHandle,charBuf,temperatureAlert);
-  
+  // msg.toCharArray(charBuf, msg.length()+1);
+
+    
+  //sendMessage(iotHubClientHandle,charBuf,temperatureAlert);
+//  char* moisturetemp =moistureValue +'0';
+  signed int moistureValueToSend = moistureValue;
   if(moistureValue < 20){
       if(valvePoistion == 0){  //Open only if it is closed
         Serial.print("OPening valve ");
       digitalWrite(solenoidPin, LOW);    //Switch Solenoid ON
+      
         
       valvePoistion =1;
+      simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
       delay(60000);                      //Wait 1 Minute  
       }else{
+        simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
         Serial.print("Not opening as it is already open");
         delay(10000);                      //Wait 1 Minute  
       }
@@ -142,13 +156,14 @@ void loop() {
         digitalWrite(solenoidPin, HIGH);     //Switch Solenoid OFF
   
          valvePoistion=0;  
+         simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
     }else{
-
+    simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
       Serial.print("Not closing valve as it is already closed");
     }
     
-    //delay(3600000);                      //Wait 1 Hour  
-    delay(10000);                      //Wait 10 sec Hour  
+    delay(1800000);                      //Wait 30 minutes Hour  
+    //delay(10000);                      //Wait 10 sec Hour  
 
   }
   //Serial.print("Mositure : ");
@@ -187,3 +202,42 @@ void reconnect() {
   
 } 
 */
+void initTime() {
+#if defined(ARDUINO_SAMD_ZERO) || defined(ARDUINO_SAMD_MKR1000) || defined(ARDUINO_SAMD_FEATHER_M0)
+    WiFiUDP ntpUdp;
+
+    NTPClient ntpClient(ntpUdp);
+
+    ntpClient.begin();
+
+    while (!ntpClient.update()) {
+        Serial.println("Fetching NTP epoch time failed! Waiting 5 seconds to retry.");
+        delay(5000);
+    }
+
+    ntpClient.end();
+
+    unsigned long epochTime = ntpClient.getEpochTime();
+
+    Serial.print("Fetched NTP epoch time is: ");
+    Serial.println(epochTime);
+
+#elif ARDUINO_ARCH_ESP8266
+    time_t epochTime;
+
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
+    while (true) {
+        epochTime = time(NULL);
+
+        if (epochTime == 0) {
+            Serial.println("Fetching NTP epoch time failed! Waiting 2 seconds to retry.");
+            delay(2000);
+        } else {
+            Serial.print("Fetched NTP epoch time is: ");
+            Serial.println(epochTime);
+            break;
+        }
+    }
+#endif
+}

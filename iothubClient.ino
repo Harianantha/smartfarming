@@ -2,8 +2,10 @@ static WiFiClientSecure sslClient; // for ESP8266
 
 const char *onSuccess = "\"Successfully invoke device method\"";
 const char *notFound = "\"No method found\"";
-bool messagePending=false;
-bool messageSending=false;
+
+
+static int pendingMessages = 0;
+static bool anyMessagesPending = false;       
 /*
  * The new version of AzureIoTHub library change the AzureIoTHubClient signature.
  * As a temporary solution, we will test the definition of AzureIoTHubVersion, which is only defined
@@ -32,6 +34,7 @@ bool messageSending=false;
 
 static void sendCallback(IOTHUB_CLIENT_CONFIRMATION_RESULT result, void *userContextCallback)
 {
+    pendingMessages --;
     if (IOTHUB_CLIENT_CONFIRMATION_OK == result)
     {
         Serial.println("Message sent to Azure IoT Hub");
@@ -41,7 +44,11 @@ static void sendCallback(IOTHUB_CLIENT_CONFIRMATION_RESULT result, void *userCon
     {
         Serial.println("Failed to send message to Azure IoT Hub");
     }
-    messagePending = false;
+    if (pendingMessages == 0){
+      
+        anyMessagesPending = false;  
+        Serial.println("Setting anyMessagesPending to false in falure of message sending \r\n");
+    }
 }
 
 static void sendMessage(IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle, char *buffer, bool temperatureAlert)
@@ -55,32 +62,51 @@ static void sendMessage(IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle, char *buffer
     else
     {
         MAP_HANDLE properties = IoTHubMessage_Properties(messageHandle);
-        Map_Add(properties, "temperatureAlert", temperatureAlert ? "true" : "false");
+    //    Map_Add(properties, "temperatureAlert", temperatureAlert ? "true" : "false");
         Serial.printf("Sending message: %s.\r\n", buffer);
         if (IoTHubClient_LL_SendEventAsync(iotHubClientHandle, messageHandle, sendCallback, NULL) != IOTHUB_CLIENT_OK)
         {
             Serial.println("Failed to hand over the message to IoTHubClient.");
+             if (pendingMessages == 0){
+      
+                 anyMessagesPending = false;  
+            Serial.println("Setting anyMessagesPending to false in falure of message sending \r\n");
+          }
         }
         else
         {
-            messagePending = true;
+        
+            pendingMessages ++;
+            anyMessagesPending = true;
             Serial.println("IoTHubClient accepted the message for delivery.");
         }
 
         IoTHubMessage_Destroy(messageHandle);
+        while (anyMessagesPending)
+        {
+            Serial.println("In Looop to push message");
+              IoTHubClient_LL_DoWork(iotHubClientHandle);
+              ThreadAPI_Sleep(100);
+        }
+        printf("No messages are pending. Exiting loop");
+        IoTHubClient_LL_Destroy(iotHubClientHandle);
+       // platform_deinit();
+        
+
+        
     }
 }
 
 void start()
 {
     Serial.println("Start sending temperature and humidity data.");
-    messageSending = true;
+   // messageSending = true;
 }
 
 void stop()
 {
     Serial.println("Stop sending temperature and humidity data.");
-    messageSending = false;
+   // messageSending = false;
 }
 
 IOTHUBMESSAGE_DISPOSITION_RESULT receiveMessageCallback(IOTHUB_MESSAGE_HANDLE message, void *userContextCallback)
