@@ -1,6 +1,10 @@
 //#include <avr/sleep.h>
 #include <ESP8266WiFi.h>
 
+#include <PubSubClient.h>
+
+#include <DHT.h>       
+
 
 
 
@@ -9,36 +13,39 @@
 #include <AzureIoTUtility.h>
 #include "simplesample_mqtt.h"
 
-#define MESSAGE_MAX_LEN 256
+// DHT11 Sensor---------------
+#define DHTTYPE DHT11   
+#define dht_dpin 0
+DHT dht(dht_dpin, DHTTYPE); 
+// ----------------------------
+
+#define MESSAGE_MAX_LEN 512
 int sensor_pin = A0; 
-//int sensor_pin = 12; 
-//int solenoidPin = 4;    //This is the output pin on the Arduino we are using
 int solenoidPin = 05;    //Testing with LED instead of solenoid
 
 const char* ssid = "Techolution";
 const char* password = "wearethebest";
 
-int moistureValue ;
+int moistureValue =0;
 int valvePoistion = 0;
 
-
-
-static char *connectionString = "HostName=techo-iothub.azure-devices.net;DeviceId=techo_smartfarming_soilmoisture_001;SharedAccessKey=Jh8KJbwrH8wNpElZlQbwXCyXY7qo5HxEug/R/igYgRs=";
-//static char *ssid = "Wifi One";
-static char *pass = "wearethebest";
-
-//mqtt m = mqtt.Client("techo_smartfarming_soilmoisture_001", 120, "techo-iothub.azure-devices.net/techo_smartfarming_soilmoisture_001/api-version=2016-11-14", "SharedAccessSignature sr=techo-iothub.azure-devices.net%2Fdevices%2Ftecho_smartfarming_soilmoisture_001&sig=YtOk64m1HpF8f2lIbVejDfX8R6ebQIy4aIedGfpwZQE%3D&se=1546416624")
+const char* mqtt_server = "iot.eclipse.org";
+const char* TOPIC_NAME = "techo/smartfarm/321";
 
 WiFiClient espClient;
-//PubSubClient client(espClient);
+PubSubClient client(espClient);
+
+static char *connectionString = "HostName=techo-iothub.azure-devices.net;DeviceId=techo_smartfarming_soilmoisture_001;SharedAccessKey=Jh8KJbwrH8wNpElZlQbwXCyXY7qo5HxEug/R/igYgRs=";
 
 
 char* clientId = "techo_smartfarming_soilmoisture_001";
 char* userName= "techo-iothub.azure-devices.net/techo_smartfarming_soilmoisture_001/api-version=2016-11-14";
 char* mqtt_password= "SharedAccessSignature sr=techo-iothub.azure-devices.net%2Fdevices%2Ftecho_smartfarming_soilmoisture_001&sig=5DC6WzpK7TVP21US7zstm%2B5BOH5KlX5Yf29DNBZ6qj4%3D&se=1546520267";
-char* mqtt_server="techo-iothub.azure-devices.net";
-int mqtt_port= 8883;
-char* topicName = "devices/techo_smartfarming_soilmoisture_001/messages/events";
+
+
+
+
+
 void setup_wifi() {
    delay(100);
   // We start by connecting to a WiFi network
@@ -56,83 +63,41 @@ void setup_wifi() {
 }
 
 //static IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle;
+void setupMQTT(){
+   client.setServer(mqtt_server, 1883);
+   client.setCallback(callback);
+}
 void setup() {
+  dht.begin();
+  pinMode(solenoidPin, OUTPUT);
   Serial.begin(9600);
   Serial.println("Reading From the Sensor ...");
-  delay(2000);
-  //set_sleep_mode (SLEEP_MODE_PWR_DOWN);  
-  //sleep_enable();
-  pinMode(solenoidPin, OUTPUT);
-
   setup_wifi();
-  //client.setServer(mqtt_server, 1883);
+  delay(1000);
+  setupMQTT();
   initTime();
-
-//setup Last Will and Testament (optional)
-// Broker will publish a message with qos = 0, retain = 0, data = "offline" 
-// to topic "/lwt" if client don't send keepalive packet
-  /*m:lwt("/lwt", "offline", 1, 0)
-
-  m:on("connect", function(client) print ("connected") end)
-  m:on("offline", function(client) print ("offline") end)
-  */
-/*
-  iotHubClientHandle = IoTHubClient_LL_CreateFromConnectionString(connectionString, MQTT_Protocol);
-    if (iotHubClientHandle == NULL)
-    {
-        Serial.println("Failed on IoTHubClient_CreateFromConnectionString.");
-        while (1);
-    }
-
-    IoTHubClient_LL_SetOption(iotHubClientHandle, "product_info", "Techolution_SmartFarmingDemo-C");
-    IoTHubClient_LL_SetMessageCallback(iotHubClientHandle, receiveMessageCallback, NULL);
-    IoTHubClient_LL_SetDeviceMethodCallback(iotHubClientHandle, deviceMethodCallback, NULL);
-    IoTHubClient_LL_SetDeviceTwinCallback(iotHubClientHandle, twinCallback, NULL);
-*/
-  
+ 
   }
 
 void loop() {
 
-  //Serial.print("OPening valve ");
-//  digitalWrite(solenoidPin, HIGH);    //Switch Solenoid ON
-//  delay(20000);                      //Wait 1 Second
- // Serial.print("Closing valve ");
   digitalWrite(solenoidPin, HIGH);     //Switch Solenoid OFF
-  delay(10000);                      //Wait 1 Second
-  //TESTing WITHOUT SENSOR START
- // moistureValue= 300;
 
+  
   //TESTing WITHOUT SENSOR END
+ 
   moistureValue= analogRead(sensor_pin);
-  //moistureValue= digitalRead(sensor_pin);
+    
+    
   Serial.print("moistureValue  before conversion");
   Serial.print(moistureValue);
   Serial.print("%");
- // moistureValue = map(moistureValue,550,0,0,100);
   moistureValue = map(moistureValue,1023,250,0,100);
   Serial.print("moistureValue  after  conversion");
   Serial.print(moistureValue);
-  time_t now = time(nullptr);
- // Serial.println(ctime(&now));
-  char* msg="{\"deviceId\":\"techo_smartfarming_soilmoisture_001\",\"moisture\":\"50";
- // msg= msg+ moistureValue+"\"}";
-  //Serial.print("Message is ");
-  //Serial.print(msg);
- // char* message[msg.length()];
-//  msg.toCharArray(message,500);
-  //SENDING TO MQTT ENDPOINT though successful from client, its not getting picked up at server side
- // client.publish(topicName, message,1);
 
-  char messagePayload[MESSAGE_MAX_LEN];
-   bool temperatureAlert = false;
-//   char* charBuf[msg.length()+1];
-//  bool alert = readMessage(moistureValue, messagePayload);
-  // msg.toCharArray(charBuf, msg.length()+1);
-
-    
-  //sendMessage(iotHubClientHandle,charBuf,temperatureAlert);
-//  char* moisturetemp =moistureValue +'0';
+ // char messagePayload[MESSAGE_MAX_LEN];
+  
   signed int moistureValueToSend = moistureValue;
   if(moistureValue < 20){
       if(valvePoistion == 0){  //Open only if it is closed
@@ -142,11 +107,11 @@ void loop() {
         
       valvePoistion =1;
       simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
-      delay(60000);                      //Wait 1 Minute  
+   //   delay(60000);                      //Wait 1 Minute  
       }else{
         simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
         Serial.print("Not opening as it is already open");
-        delay(10000);                      //Wait 1 Minute  
+     //   delay(10000);                      //Wait 1 Minute  
       }
       
   }else{
@@ -161,47 +126,25 @@ void loop() {
     simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
       Serial.print("Not closing valve as it is already closed");
     }
-    
-    delay(1800000);                      //Wait 30 minutes Hour  
-    //delay(10000);                      //Wait 10 sec Hour  
 
   }
-  //Serial.print("Mositure : ");
-  //Serial.print(moistureValue);
-  //Serial.println("%");
-  //delay(10000);
-  }
-
-/*
-void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) 
-  {
-    Serial.print("Attempting MQTT connection...");
-    
-        // Attempt to connect
-    //if you MQTT broker has clientID,username and password
-    //please change following line to    if (client.connect(clientId,userName,passWord))
-    //if (client.connect(clientId.c_str()))
-    if (client.connect(clientId,userName,mqtt_password))
-    {
-      Serial.println("connected");
-     //once connected to MQTT broker, subscribe command if any
-    //  client.subscribe("OsoyooCommand");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 6 seconds before retrying
-      delay(6000);
-    }
-  }
-
-
-
+     float h = dht.readHumidity();
   
-} 
-*/
+  float t = dht.readTemperature();  
+  
+    
+    Serial.print("tempereatue from DHT");
+    Serial.print(t);
+    Serial.print("\nmoisture from DHT");
+    Serial.print(h);
+    Serial.print("\n");
+    
+    publishToMQTT(h,t,moistureValueToSend);
+    delay(60000);
+  //  delay(5000);
+  }
+
+
 void initTime() {
 #if defined(ARDUINO_SAMD_ZERO) || defined(ARDUINO_SAMD_MKR1000) || defined(ARDUINO_SAMD_FEATHER_M0)
     WiFiUDP ntpUdp;
@@ -240,4 +183,63 @@ void initTime() {
         }
     }
 #endif
+}
+
+
+void publishToMQTT(float relativehumid,float temperature,int sandmoisture) {
+  // Loop until we're reconnected
+      //while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+   if (client.connect("ESP826645525852Client")) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      String msg="{\"deviceId\":\"techo_smartfarming_soilmoisture_001\",";
+      delay(100);
+      // msg = msg+"\"ambienttemperature\":"+temperature+",\"sandmoisture\":"+sandmoisture+",\"relativehumid\":"+relativehumid;
+       msg = msg+"\"h\":"+relativehumid+",\"m\":"+sandmoisture+",\"t\":"+temperature;
+     delay(100);
+      msg=msg+"}";
+      delay(100);
+      int n = msg.length(); 
+      Serial.println(n);
+      char char_array[n+1]; 
+      strcpy(char_array, msg.c_str()); 
+      delay(500);
+      Serial.println("Message to Send to MQTT\n");
+      Serial.println(char_array);
+      client.publish("techo/smartfarm/321", char_array);
+      client.publish("techo/smartfarm/testing", "testmessage");
+      Serial.println("Message Sent to MQTT\n");
+      // ... and resubscribe
+      //client.subscribe("inTopic");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+ // }
+}
+
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+/*
+  // Switch on the LED if an 1 was received as first character
+  if ((char)payload[0] == '1') {
+    digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
+    // but actually the LED is on; this is because
+    // it is acive low on the ESP-01)
+  } else {
+    digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
+  }
+*/
 }
