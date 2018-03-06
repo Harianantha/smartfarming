@@ -15,13 +15,16 @@
 
 // DHT11 Sensor---------------
 #define DHTTYPE DHT11   
-#define dht_dpin 0
+#define dht_dpin 2
 DHT dht(dht_dpin, DHTTYPE); 
 // ----------------------------
 
 #define MESSAGE_MAX_LEN 512
 int sensor_pin = A0; 
 int solenoidPin = 05;    //Testing with LED instead of solenoid
+int flowPin = 04;
+unsigned long flowcount = 0;
+#define countof(a) (sizeof(a) / sizeof(a[0]))
 
 const char* ssid = "Techolution";
 const char* password = "wearethebest";
@@ -68,56 +71,74 @@ void setupMQTT(){
    client.setCallback(callback);
 }
 void setup() {
-  dht.begin();
+  
   pinMode(solenoidPin, OUTPUT);
   Serial.begin(9600);
-  Serial.println("Reading From the Sensor ...");
+  Serial.println("Reading From the Sensor ...\n");
+  Serial.println("\n");
   setup_wifi();
   delay(1000);
   setupMQTT();
+  pinMode(flowPin, INPUT_PULLUP);
+  attachInterrupt(flowPin, flow, CHANGE);
   initTime();
+  dht.begin();
  
   }
+  void flow()
+{
+flowcount +=1;
+}
 
 void loop() {
-
+dht.begin();
   digitalWrite(solenoidPin, HIGH);     //Switch Solenoid OFF
+  valvePoistion = 0;
 
   
+float l = flowcount/450.0;
+Serial.print("Flow in Liters: ");
+Serial.print(l);
+Serial.print("\n");
   //TESTing WITHOUT SENSOR END
  
   moistureValue= analogRead(sensor_pin);
+   float h = dht.readHumidity();
+   float t = dht.readTemperature();  
+  
+
+    Serial.print("tempereatue from DHT ");
+    Serial.print(t);
+    Serial.print("\nmoisture from DHT ");
+    Serial.print(h);
+    Serial.print("\n");
     
     
-  Serial.print("moistureValue  before conversion");
-  Serial.print(moistureValue);
-  Serial.print("%");
+    
+ // Serial.print("moistureValue  before conversion");
+ // Serial.print(moistureValue);
+ // Serial.print("%");
   moistureValue = map(moistureValue,1023,250,0,100);
-  Serial.print("moistureValue  after  conversion");
+ // Serial.print("moistureValue  after  conversion");
   Serial.print(moistureValue);
 
- // char messagePayload[MESSAGE_MAX_LEN];
   
+
   signed int moistureValueToSend = moistureValue;
+  Serial.println(valvePoistion);
 
 
-     float h = dht.readHumidity();
-  
-  float t = dht.readTemperature();  
+
+  	Serial.print("\n");
   
   if(moistureValue < 20){
       if(valvePoistion == 0){  //Open only if it is closed
-        Serial.print("OPening valve ");
-      digitalWrite(solenoidPin, LOW);    //Switch Solenoid ON
-      
-        
+      Serial.print("Opening valve");
+      digitalWrite(solenoidPin, LOW);    //Switch Solenoid ON  
       valvePoistion =1;
-      simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion);
-   //   delay(60000);                      //Wait 1 Minute  
       }else{
-        simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion);
+
         Serial.print("Not opening as it is already open");
-     //   delay(10000);                      //Wait 1 Minute  
       }
       
   }else{
@@ -127,24 +148,17 @@ void loop() {
         digitalWrite(solenoidPin, HIGH);     //Switch Solenoid OFF
   
          valvePoistion=0;  
-         simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion);
+
     }else{
-    simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion);
+
       Serial.print("Not closing valve as it is already closed");
     }
 
   }
-  
-    
-    Serial.print("tempereatue from DHT");
-    Serial.print(t);
-    Serial.print("\nmoisture from DHT");
-    Serial.print(h);
-    Serial.print("\n");
-    
-    publishToMQTT(h,t,moistureValueToSend,valvePoistion);
-    delay(60000);
-  //  delay(5000);
+  publishToMQTT(l,h,t,moistureValue,valvePoistion);
+  simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion,l);
+     delay(60000);
+    // delay(5000);
   }
 
 
@@ -189,7 +203,7 @@ void initTime() {
 }
 
 
-void publishToMQTT(float relativehumid,float temperature,int sandmoisture,int valveposition) {
+void publishToMQTT(float litre,float relativehumid,float temperature,int sandmoisture,int valvePoistion) {
   // Loop until we're reconnected
       //while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
@@ -200,7 +214,7 @@ void publishToMQTT(float relativehumid,float temperature,int sandmoisture,int va
       String msg="{\"deviceId\":\"techo_smartfarming_soilmoisture_001\",";
       delay(100);
       // msg = msg+"\"ambienttemperature\":"+temperature+",\"sandmoisture\":"+sandmoisture+",\"relativehumid\":"+relativehumid;
-       msg = msg+"\"h\":"+relativehumid+",\"m\":"+sandmoisture+",\"t\":"+temperature+",\"vp\":"+valveposition;
+       msg = msg+"\"h\":"+relativehumid+",\"m\":"+sandmoisture+",\"t\":"+temperature+",\"l\":"+litre+",\"vp\":"+valvePoistion;
      delay(100);
       msg=msg+"}";
       delay(100);
@@ -212,7 +226,7 @@ void publishToMQTT(float relativehumid,float temperature,int sandmoisture,int va
       Serial.println("Message to Send to MQTT\n");
       Serial.println(char_array);
       client.publish("techo/smartfarm/321", char_array);
-      client.publish("techo/smartfarm/testing", "testmessage");
+      //client.publish("techo/smartfarm/testing", "testmessage");
       Serial.println("Message Sent to MQTT\n");
       // ... and resubscribe
       //client.subscribe("inTopic");

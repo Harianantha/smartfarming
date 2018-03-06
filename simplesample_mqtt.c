@@ -43,9 +43,10 @@ BEGIN_NAMESPACE(TelemetryData);
 DECLARE_MODEL(MetricsData,
 WITH_DATA(ascii_char_ptr, DeviceId),
 WITH_DATA(int, sm), //SAND MOISTRUE
-WITH_DATA(float, rh),//RELATIVE HUMIDITY
-WITH_DATA(float, at),  //AMBIENT TEMPERATURE
-WITH_DATA(int, vp)  //VALVE POSITION
+WITH_DATA(int, rh),//RELATIVE HUMIDITY
+WITH_DATA(int, at),  //AMBIENT TEMPERATURE
+WITH_DATA(int, vp),  //VALVE POSITION
+WITH_DATA(int, wq)  //WATER QUANTITY
 //WITH_DATA(float, Temperature),
 //WITH_DATA(float, Humidity),
 //WITH_ACTION(TurnFanOn),
@@ -179,7 +180,7 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT IoTHubMessage(IOTHUB_MESSAGE_HANDLE mess
     return result;
 }
 
-void simplesample_mqtt_run( float rh,int unitval,float at,int valveposition)
+void simplesample_mqtt_run( int rh,int unitval,int at,int valveposition,int waterquantity)
 {
     printf("In simplesample_mqtt_run\n");
     printf("Moisture value in simplesample_mqtt_run is");
@@ -232,11 +233,12 @@ void simplesample_mqtt_run( float rh,int unitval,float at,int valveposition)
                         moistureData->rh =rh;
                         moistureData->at =at;
                         moistureData->vp =valveposition;
+                        moistureData->wq =waterquantity;
    
                             
                             unsigned char* destination;
                             size_t destinationSize;
-                           if (SERIALIZE(&destination, &destinationSize, moistureData->DeviceId,moistureData->sm,moistureData->rh,moistureData->at,moistureData->vp) != CODEFIRST_OK)
+                           if (SERIALIZE(&destination, &destinationSize, moistureData->DeviceId,moistureData->sm,moistureData->rh,moistureData->at,moistureData->vp,moistureData->wq) != CODEFIRST_OK)
                             {
                                 (void)printf("Failed to serialize\r\n");
                                 printf("Failed to serialize\r\n");
