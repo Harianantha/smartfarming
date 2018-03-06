@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-    void simplesample_mqtt_run(char* nameVal,int unitval,char* unitVal);
+    void simplesample_mqtt_run(float rh,int unitval,float at,int valveposition);
 
 #ifdef __cplusplus
 }

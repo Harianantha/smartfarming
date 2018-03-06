@@ -99,6 +99,12 @@ void loop() {
  // char messagePayload[MESSAGE_MAX_LEN];
   
   signed int moistureValueToSend = moistureValue;
+
+
+     float h = dht.readHumidity();
+  
+  float t = dht.readTemperature();  
+  
   if(moistureValue < 20){
       if(valvePoistion == 0){  //Open only if it is closed
         Serial.print("OPening valve ");
@@ -106,10 +112,10 @@ void loop() {
       
         
       valvePoistion =1;
-      simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
+      simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion);
    //   delay(60000);                      //Wait 1 Minute  
       }else{
-        simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
+        simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion);
         Serial.print("Not opening as it is already open");
      //   delay(10000);                      //Wait 1 Minute  
       }
@@ -121,16 +127,13 @@ void loop() {
         digitalWrite(solenoidPin, HIGH);     //Switch Solenoid OFF
   
          valvePoistion=0;  
-         simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
+         simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion);
     }else{
-    simplesample_mqtt_run("solilmoisture",moistureValueToSend,"p");
+    simplesample_mqtt_run(h,moistureValueToSend,t,valvePoistion);
       Serial.print("Not closing valve as it is already closed");
     }
 
   }
-     float h = dht.readHumidity();
-  
-  float t = dht.readTemperature();  
   
     
     Serial.print("tempereatue from DHT");
@@ -139,7 +142,7 @@ void loop() {
     Serial.print(h);
     Serial.print("\n");
     
-    publishToMQTT(h,t,moistureValueToSend);
+    publishToMQTT(h,t,moistureValueToSend,valvePoistion);
     delay(60000);
   //  delay(5000);
   }
@@ -186,7 +189,7 @@ void initTime() {
 }
 
 
-void publishToMQTT(float relativehumid,float temperature,int sandmoisture) {
+void publishToMQTT(float relativehumid,float temperature,int sandmoisture,int valveposition) {
   // Loop until we're reconnected
       //while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
@@ -197,7 +200,7 @@ void publishToMQTT(float relativehumid,float temperature,int sandmoisture) {
       String msg="{\"deviceId\":\"techo_smartfarming_soilmoisture_001\",";
       delay(100);
       // msg = msg+"\"ambienttemperature\":"+temperature+",\"sandmoisture\":"+sandmoisture+",\"relativehumid\":"+relativehumid;
-       msg = msg+"\"h\":"+relativehumid+",\"m\":"+sandmoisture+",\"t\":"+temperature;
+       msg = msg+"\"h\":"+relativehumid+",\"m\":"+sandmoisture+",\"t\":"+temperature+",\"vp\":"+valveposition;
      delay(100);
       msg=msg+"}";
       delay(100);
